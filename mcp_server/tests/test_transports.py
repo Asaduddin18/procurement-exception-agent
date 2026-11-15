@@ -6,7 +6,7 @@ import sys
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
-from mcp.client.streamable_http import streamablehttp_client
+from mcp.client.streamable_http import streamable_http_client
 
 from mcp_server.embeddings import FixtureEmbedder
 from mcp_server.server import create_server
@@ -87,7 +87,7 @@ def test_streamable_http_transport(reader_url):
                         break
                 else:
                     raise AssertionError("HTTP MCP server exited before binding a port.")
-            async with streamablehttp_client(f"http://127.0.0.1:{port}/mcp") as (
+            async with streamable_http_client(f"http://127.0.0.1:{port}/mcp") as (
                 read, write, _,
             ):
                 async with ClientSession(read, write) as session:
