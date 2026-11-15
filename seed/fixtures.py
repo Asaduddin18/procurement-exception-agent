@@ -55,6 +55,15 @@ RULES = (
     ("US-PROCUREMENT", 2027, "FINANCE_DIRECTOR_CAP", Decimal("12500.00"), "USD"),
 )
 
+RULE_SOURCES = (
+    ("US-PROCUREMENT", 2026, "PAYMENT_TERMS_DAYS", 1),
+    ("US-PROCUREMENT", 2026, "FINANCE_DIRECTOR_CAP", 2),
+    ("US-PROCUREMENT", 2026, "PRICE_VARIANCE_FRACTION", 3),
+    ("US-PROCUREMENT", 2024, "FINANCE_DIRECTOR_CAP", 1),
+    ("EU-FREIGHT", 2026, "FINANCE_DIRECTOR_CAP", 1),
+    ("US-PROCUREMENT", 2027, "FINANCE_DIRECTOR_CAP", 1),
+)
+
 # The first three vector dimensions represent terms, approval caps, and variance.
 # Close negative controls let the retrieval tests expose missing SQL filters.
 CHUNKS = (

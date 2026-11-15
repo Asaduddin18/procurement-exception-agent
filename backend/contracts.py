@@ -6,6 +6,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, StringConstraints, model_validator
 
+from backend.review_models import ReviewOutcome
+
 CENT = Decimal("0.01")
 Region = Annotated[str, StringConstraints(pattern=r"^[A-Z]{2}$")]
 Category = Annotated[str, StringConstraints(pattern=r"^[a-z0-9][a-z0-9_-]{0,63}$")]
@@ -104,3 +106,4 @@ class RunStatus(BaseModel):
     region: str
     error_code: str | None
     extracted_po: ExtractedPurchaseOrder | None
+    decision_evidence: ReviewOutcome | None = None

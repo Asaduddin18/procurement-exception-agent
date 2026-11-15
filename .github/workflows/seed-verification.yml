@@ -1,4 +1,4 @@
-name: Verify procurement data, MCP evidence, and intake
+name: Verify procurement data, intake, and policy review
 
 on:
   pull_request:

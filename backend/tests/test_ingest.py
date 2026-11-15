@@ -120,7 +120,7 @@ def test_worker_recovers_expired_lease_and_rejects_stale_write(store):
     asyncio.run(verify())
     with psycopg.connect(store.database_url) as connection:
         assert connection.execute("""
-            SELECT status, attempts, lease_token FROM procurement_jobs WHERE run_id = %s
+            SELECT status, attempts, lease_token FROM procurement_jobs WHERE run_id = %s AND kind = 'PROCESS'
         """, (received.run_id,)).fetchone() == ("COMPLETED", 2, None)
         assert connection.execute("""
             SELECT event_type FROM audit_logs WHERE run_id = %s ORDER BY audit_id

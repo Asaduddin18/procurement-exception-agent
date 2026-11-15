@@ -97,7 +97,8 @@ class IngestionStore:
     async def get_run(self, run_id: UUID) -> RunStatus | None:
         async with await self.connect() as connection:
             cursor = await connection.execute("""
-                SELECT run_id, thread_id, status, category, region, error_code, extracted_po
+                SELECT run_id, thread_id, status, category, region, error_code, extracted_po,
+                       NULLIF(decision_evidence, '{}'::jsonb) AS decision_evidence
                 FROM procurement_runs WHERE run_id = %s
             """, (run_id,))
             row = await cursor.fetchone()
@@ -151,6 +152,12 @@ class IngestionStore:
                 Jsonb(order.model_dump(mode="json")) if order else None,
                 error_code, run_id,
             ))
+            if order is not None:
+                await connection.execute("""
+                    INSERT INTO procurement_jobs (job_id, run_id, kind)
+                    VALUES (%s, %s, 'EVALUATE')
+                    ON CONFLICT (run_id, kind) DO NOTHING
+                """, (uuid4(), run_id))
             await connection.execute("""
                 INSERT INTO audit_logs (run_id, event_key, event_type, details)
                 VALUES (%s, 'extraction_finished', %s, %s)

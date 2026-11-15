@@ -12,7 +12,9 @@ from pydantic import ValidationError
 from starlette.datastructures import UploadFile
 
 from backend.contracts import AcceptedRun, EmailIntake, IntakeMetadata, RunStatus
-from backend.store import IngestionStore
+from backend.review_auth import authenticate, load_reviewers
+from backend.review_models import AuditEvent, Resolution, ResolutionRequest
+from backend.review_store import ReviewConflict, ReviewForbidden, ReviewNotFound, ReviewStore
 
 DEFAULT_DATABASE_URL = "postgresql://procurement:procurement@127.0.0.1:5432/procurement"
 MAX_PDF_BYTES = 10 * 1024 * 1024
@@ -98,10 +100,17 @@ async def intake_payload(request: Request, webhook_token: str | None) -> tuple[b
     return pdf, metadata
 
 
-def create_app(database_url: str | None = None, webhook_token: str | None = None) -> FastAPI:
-    store = IngestionStore(database_url or os.environ.get("DATABASE_URL") or DEFAULT_DATABASE_URL)
+def create_app(
+    database_url: str | None = None, webhook_token: str | None = None,
+    reviewer_credentials: str | None = None,
+) -> FastAPI:
+    store = ReviewStore(database_url or os.environ.get("DATABASE_URL") or DEFAULT_DATABASE_URL)
     email_token = webhook_token if webhook_token is not None else os.environ.get("INGEST_WEBHOOK_TOKEN")
-    app = FastAPI(title="Procurement intake", version="0.3.0")
+    reviewers = load_reviewers(
+        reviewer_credentials if reviewer_credentials is not None
+        else os.environ.get("REVIEWER_CREDENTIALS_JSON", "{}")
+    )
+    app = FastAPI(title="Procurement workflow", version="0.4.0")
 
     @app.post(
         "/api/v1/ingest",
@@ -129,5 +138,34 @@ def create_app(database_url: str | None = None, webhook_token: str | None = None
         if result is None:
             raise HTTPException(404, "Procurement run was not found.")
         return result
+
+    @app.post("/api/v1/runs/{run_id}/resolve", status_code=202)
+    async def resolve(run_id: UUID, body: ResolutionRequest, request: Request) -> dict[str, str]:
+        reviewer = authenticate(reviewers, request.headers.get("authorization", ""))
+        if reviewer is None:
+            raise HTTPException(401, "Reviewer credential required.", {"WWW-Authenticate": "Bearer"})
+        actor, role = reviewer
+        try:
+            await store.queue_resolution(run_id, Resolution(
+                **body.model_dump(), actor_id=actor, role=role,
+            ))
+        except ReviewNotFound as exc:
+            raise HTTPException(404, str(exc)) from None
+        except ReviewForbidden as exc:
+            raise HTTPException(403, str(exc)) from None
+        except ReviewConflict as exc:
+            raise HTTPException(409, str(exc)) from None
+        except psycopg.Error:
+            raise HTTPException(503, "Procurement review storage is unavailable.") from None
+        return {"status": "resolution_queued", "run_id": str(run_id)}
+
+    @app.get("/api/v1/runs/{run_id}/audit", response_model=list[AuditEvent])
+    async def get_audit(run_id: UUID) -> list[AuditEvent]:
+        try:
+            return await store.get_audit(run_id)
+        except ReviewNotFound as exc:
+            raise HTTPException(404, str(exc)) from None
+        except psycopg.Error:
+            raise HTTPException(503, "Procurement review storage is unavailable.") from None
 
     return app
