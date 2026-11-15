@@ -46,14 +46,14 @@ async def advance(graph, job: ReviewJob) -> ReviewOutcome:
         return ReviewOutcome(status="FAILED", resolution=job.resolution, error_code="review_attempts_exhausted")
 
     if job.kind == "RESUME" and interrupted(snapshot) and job.resolution is not None:
-        await graph.ainvoke(Command(resume=job.resolution.model_dump(mode="json")), config)
+        await graph.ainvoke(Command(resume=job.resolution.model_dump(mode="json")), config, durability="sync")
     elif snapshot.next and not interrupted(snapshot):
-        await graph.ainvoke(None, config)
+        await graph.ainvoke(None, config, durability="sync")
     elif job.kind == "EVALUATE" and not snapshot.values:
         await graph.ainvoke({
             "run_id": str(job.run_id), "category": job.category, "region": job.region,
             "extracted_po": job.extracted_po,
-        }, config)
+        }, config, durability="sync")
     else:
         raise RuntimeError("No checkpoint can accept this policy job.")
 
@@ -82,7 +82,10 @@ async def process_review(store: ReviewStore, graph) -> bool:
 
 async def setup_checkpointer(store: ReviewStore, saver: AsyncPostgresSaver) -> None:
     async with await store.connect() as connection:
-        await connection.execute("SELECT pg_advisory_xact_lock(%s)", (CHECKPOINT_SETUP_LOCK,))
+        # PostgresSaver can build indexes concurrently. Keep the setup mutex
+        # session-scoped so the setup connection is never waiting on our transaction.
+        await connection.set_autocommit(True)
+        await connection.execute("SELECT pg_advisory_lock(%s)", (CHECKPOINT_SETUP_LOCK,))
         await saver.setup()
 
 
