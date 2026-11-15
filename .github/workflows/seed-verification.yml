@@ -1,9 +1,11 @@
-name: Verify procurement schema and fixtures
+name: Verify procurement data and MCP evidence
 
 on:
   pull_request:
     paths:
       - 'seed/**'
+      - 'mcp_server/**'
+      - 'conftest.py'
       - 'docker-compose.yml'
       - '.env.example'
       - '.github/workflows/seed-verification.yml'
@@ -23,9 +25,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: python -m pip install -r seed/requirements-test.txt
+      - run: python -m pip install -r seed/requirements-test.txt -r mcp_server/requirements.txt
       - run: docker compose up -d --wait postgres
       - run: python -m seed.seed
-      - run: python -m pytest -q seed/tests
+      - run: python -m pytest -q seed/tests mcp_server/tests
       - if: always()
         run: docker compose down -v
