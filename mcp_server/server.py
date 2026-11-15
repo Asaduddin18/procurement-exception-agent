@@ -88,9 +88,9 @@ def main() -> None:
     if provider == "fixture":
         embedder = FixtureEmbedder()
     elif provider == "openai":
-        api_key = os.environ.get("OPENAI_API_KEY")
+        api_key = os.environ.get("MCP_OPENAI_API_KEY")
         if not api_key:
-            parser.error("OPENAI_API_KEY is required when MCP_EMBEDDING_PROVIDER=openai.")
+            parser.error("MCP_OPENAI_API_KEY is required when MCP_EMBEDDING_PROVIDER=openai.")
         embedder = OpenAIEmbedder(api_key)
     else:
         parser.error("MCP_EMBEDDING_PROVIDER must be fixture or openai.")
