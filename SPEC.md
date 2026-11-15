@@ -2,7 +2,7 @@
 
 ## Backend, MCP, and fixtures
 
-- Use Python 3.11+, FastAPI, Pydantic v2, SQLAlchemy with psycopg 3, PostgreSQL 16, and LangGraph with PostgresSaver. Parse multi-page PDFs using PyMuPDF or Docling and extract structured data with OpenAI or Anthropic. Make Langfuse tracing optional.
+- Use Python 3.11+, FastAPI, Pydantic v2, SQLAlchemy with psycopg 3, PostgreSQL 16, and LangGraph with PostgresSaver. Parse multi-page PDFs using PyMuPDF or Docling and extract structured data with DeepSeek via the OpenAI-compatible generation client. Make Langfuse tracing optional.
 - Accept PDF uploads or email webhook payloads at `POST /api/v1/ingest`. Enforce a unique SHA-256 of the original PDF bytes in `processed_events` and retain the source ID as provenance. Commit the input, run, and durable job together. Return HTTP 200 with `duplicate_ignored` and the original run ID for duplicates. Return HTTP 202 with a run ID and thread ID for a new queued run, then process it asynchronously.
 - Store vendors, price catalog, runs, audit logs, and graph checkpoints in Postgres.
 - Expose `get_vendor_contract_terms`, `get_approved_price_catalog`, and `search_sop_policy` via FastMCP over stdio and HTTP. Use exact PostgreSQL lookups for vendor terms and catalog prices. For SOPs, filter SQL candidates by active status, category, region, and effective date before pgvector ranks them. Return policy version and citations with the results.

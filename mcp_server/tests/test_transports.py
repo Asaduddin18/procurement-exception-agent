@@ -4,12 +4,14 @@ import os
 import re
 import sys
 
+import pytest
+
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from mcp.client.streamable_http import streamable_http_client
 
 from mcp_server.embeddings import FixtureEmbedder
-from mcp_server.server import create_server
+from mcp_server.server import create_server, main
 
 
 async def verify_tools(session: ClientSession) -> None:
@@ -115,3 +117,15 @@ def test_server_normalizes_scope_and_uses_injected_date():
         assert response["evaluated_on"] == "2026-10-19"
 
     asyncio.run(check())
+
+
+def test_embedding_cli_does_not_use_generation_credential(monkeypatch, capsys):
+    monkeypatch.setattr(sys, "argv", ["mcp_server.server"])
+    monkeypatch.setenv("MCP_DATABASE_URL", "postgresql://local")
+    monkeypatch.setenv("MCP_EMBEDDING_PROVIDER", "openai")
+    monkeypatch.setenv("OPENAI_API_KEY", "deepseek-test-key")
+    monkeypatch.delenv("MCP_OPENAI_API_KEY", raising=False)
+    with pytest.raises(SystemExit) as caught:
+        main()
+    assert caught.value.code == 2
+    assert "MCP_OPENAI_API_KEY is required" in capsys.readouterr().err
