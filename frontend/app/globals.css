@@ -16,10 +16,9 @@
 }
 
 * { box-sizing: border-box; }
-html, body { width: 100%; min-width: 0; }
+html, body { width: 100%; min-width: 0; overflow-x: clip; }
 body {
   margin: 0;
-  overflow-x: clip;
   font-family: Inter, Geist, ui-sans-serif, system-ui, sans-serif;
   font-size: 14px;
   color: var(--fg);
@@ -81,7 +80,7 @@ svg { flex-shrink: 0; }
 .filters button { padding: 5px 10px; font-size: 12px; text-align: center; color: var(--muted); border-radius: 5px; }
 .filters button:hover { color: var(--fg); }
 .filters button[aria-pressed="true"] { background: #2b2e36; color: var(--fg); }
-.table-scroll { display: block; width: 100%; max-width: 100%; overflow-x: auto; }
+.table-scroll { display: block; width: 100%; max-width: 100%; overflow-x: auto; contain: inline-size paint; }
 table { text-align: left; width: 100%; border-collapse: collapse; }
 th { font-size: 11px; font-weight: 670; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); background: #14161b; white-space: nowrap; }
 th, td { padding: 11px 16px; border-bottom: 1px solid var(--stroke); }
