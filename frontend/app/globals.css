@@ -79,7 +79,7 @@ svg { flex-shrink: 0; }
 .filters button { padding: 5px 10px; font-size: 12px; text-align: center; color: var(--muted); border-radius: 5px; }
 .filters button:hover { color: var(--fg); }
 .filters button[aria-pressed="true"] { background: #2b2e36; color: var(--fg); }
-.table-scroll { overflow-x: auto; }
+.table-scroll { display: block; width: 100%; max-width: 100%; overflow-x: auto; }
 table { text-align: left; width: 100%; border-collapse: collapse; }
 th { font-size: 11px; font-weight: 670; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); background: #14161b; white-space: nowrap; }
 th, td { padding: 11px 16px; border-bottom: 1px solid var(--stroke); }
@@ -175,7 +175,11 @@ tr:last-child td { border-bottom: 0; }
   .metric p { font-size: 11px; }
   .metric-icon { display: none; }
   .metric strong { font-size: 21px; }
+  .panel, .inset { min-width: 0; max-width: 100%; overflow: hidden; }
   .panel-head { padding: 11px 10px; }
+  .inspector-head > div:first-child { min-width: 0; }
+  .queue table { min-width: 730px; }
+  .line-table { min-width: 460px; }
   .inspector-body { padding: 12px 9px; }
   .review-fields { grid-template-columns: 1fr; }
 }

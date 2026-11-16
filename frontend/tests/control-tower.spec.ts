@@ -51,6 +51,9 @@ test("uploads, reviews, verifies a duplicate, and resolves a real checkpoint", a
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.getByRole("heading", { name: "Procurement runs" })).toBeVisible();
-  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  const scroll = queue.locator("..");
+  await expect(scroll).toHaveCSS("overflow-x", "auto");
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  expect(await scroll.evaluate((region) => region.scrollWidth > region.clientWidth)).toBe(true);
   await page.screenshot({ path: info.outputPath("control-tower-mobile.png"), fullPage: true });
 });
