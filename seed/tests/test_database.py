@@ -19,9 +19,9 @@ def test_seed_is_repeatable_and_keeps_policy_scope(database_url):
                    (SELECT count(*) FROM sop_policy_rules),
                    (SELECT count(*) FROM sop_policy_chunks)
         """
-        assert connection.execute(query).fetchone() == (3, 3, 6, 4, 6, 6)
+        assert connection.execute(query).fetchone() == (4, 3, 6, 4, 6, 6)
         seed.bootstrap(database_url)
-        assert connection.execute(query).fetchone() == (3, 3, 6, 4, 6, 6)
+        assert connection.execute(query).fetchone() == (4, 3, 6, 4, 6, 6)
         assert connection.execute("""
             SELECT payment_terms_days, unit_price
             FROM vendors JOIN price_catalog USING (vendor_id)

@@ -15,6 +15,7 @@ from seed.fixtures import (
     FIXTURE_EMBEDDING_SPACE,
     POLICIES,
     RULES,
+    RULE_SOURCES,
     VENDORS,
 )
 
@@ -83,6 +84,13 @@ def seed_reference_data(cursor: psycopg.Cursor) -> None:
            VALUES (%s, %s, %s, %s, %s, %s, %s::vector)
            ON CONFLICT (policy_id, version, chunk_number) DO NOTHING""",
         chunk_records,
+    )
+
+    cursor.executemany(
+        """UPDATE sop_policy_rules SET source_chunk_number = %s
+           WHERE policy_id = %s AND version = %s AND rule_code = %s
+             AND source_chunk_number IS NULL""",
+        [(chunk, policy_id, version, code) for policy_id, version, code, chunk in RULE_SOURCES],
     )
 
 
