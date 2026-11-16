@@ -50,10 +50,20 @@ test("uploads, reviews, verifies a duplicate, and resolves a real checkpoint", a
   await expect(page.locator("pre")).toContainText("CTR-APX-2026-01");
 
   await page.setViewportSize({ width: 390, height: 844 });
+  await page.reload();
   await expect(page.getByRole("heading", { name: "Procurement runs" })).toBeVisible();
   const scroll = queue.locator("..");
   await expect(scroll).toHaveCSS("overflow-x", "auto");
-  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  const mobileDimensions = await page.evaluate(() => {
+    const width = document.documentElement.clientWidth;
+    const outside = [...document.querySelectorAll("body *")]
+      .filter((element) => !element.closest(".table-scroll"))
+      .map((element) => ({ name: element.className.toString(), right: Math.round(element.getBoundingClientRect().right) }))
+      .filter((element) => element.right > width + 1);
+    return { viewport: window.innerWidth, client: width, page: document.documentElement.scrollWidth, outside };
+  });
+  expect(mobileDimensions.client, JSON.stringify(mobileDimensions)).toBe(390);
+  expect(mobileDimensions.page, JSON.stringify(mobileDimensions)).toBeLessThanOrEqual(390);
   expect(await scroll.evaluate((region) => region.scrollWidth > region.clientWidth)).toBe(true);
   await page.screenshot({ path: info.outputPath("control-tower-mobile.png"), fullPage: true });
 });
