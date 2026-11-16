@@ -53,9 +53,10 @@ def trace_url(run_id: str) -> str | None:
         return None
     base = (os.environ.get("LANGFUSE_BASE_URL") or os.environ.get("LANGFUSE_HOST")
             or "https://cloud.langfuse.com").rstrip("/")
-    if urlsplit(base).scheme not in {"http", "https"}:
-        return None
     try:
+        url = urlsplit(base)
+        if url.scheme not in {"http", "https"} or not url.hostname:
+            return None
         from langfuse import Langfuse
 
         trace_id = Langfuse.create_trace_id(seed=run_id)

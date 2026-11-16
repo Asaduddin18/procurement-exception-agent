@@ -112,10 +112,10 @@ export function Inspector({ run, pending, resolve }: {
               <thead><tr><th scope="col">Line / SKU</th><th scope="col">Qty</th><th scope="col">Unit price</th><th scope="col">Line total</th></tr></thead>
               <tbody>{po.lines.map((line) => (
                 <tr key={line.line_number} className={flagged.has(line.line_number) ? "flagged" : ""}>
-                  <td><span className="line-number">{line.line_number.toString().padStart(2, "0")}</span>
+                  <td><div className="line-sku"><span className="line-number">{line.line_number.toString().padStart(2, "0")}</span>
                     <span><strong>{line.sku}</strong><small>{line.description} · p. {line.source_page}</small></span>
                     {flagged.has(line.line_number) && <AlertTriangle size={14} aria-label="Flagged line" />}
-                  </td>
+                  </div></td>
                   <td>{line.quantity} {line.unit}</td>
                   <td>{money(line.unit_price, po.currency)}</td>
                   <td>{money(line.line_total, po.currency)}</td>

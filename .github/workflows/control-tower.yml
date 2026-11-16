@@ -31,12 +31,10 @@ jobs:
         with:
           node-version: '22'
       - run: python -m pip install -r seed/requirements-test.txt -r mcp_server/requirements.txt -r backend/requirements.txt
-      - run: npm --prefix frontend install --no-audit --no-fund
-      - name: Capture generated dependency lock
-        run: gzip -c frontend/package-lock.json | base64 -w 120 | sed 's/^/LOCK64 /'
+      - run: npm --prefix frontend ci --no-audit --no-fund
       - run: npm --prefix frontend run typecheck
       - run: npm --prefix frontend run build
-      - run: npm exec --prefix frontend -- playwright install --with-deps chromium
+      - run: npm exec --prefix frontend -- playwright install chromium
       - run: docker compose up -d --wait postgres
       - name: Start test services and verify the browser
         run: |

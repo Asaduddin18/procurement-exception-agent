@@ -6,13 +6,21 @@ test("uploads, reviews, verifies a duplicate, and resolves a real checkpoint", a
   const input = page.getByLabel("Upload purchase order PDF");
   const clean = "../seed/sample_pdfs/PO-2026-420_Clean.pdf";
   const exception = "../seed/sample_pdfs/PO-2026-419_Apex_Overcharge.pdf";
+  const cleanUpload = page.waitForResponse((response) =>
+    response.url().endsWith("/api/procurement/ingest") && response.request().method() === "POST");
   await input.setInputFiles(clean);
+  const accepted = await cleanUpload;
+  expect(accepted.status(), await accepted.text()).toBe(202);
   const queue = page.getByRole("table", { name: "Live runs" });
   const cleanRow = queue.getByRole("row").filter({ hasText: "PO-2026-420" });
   await expect(cleanRow.getByText("Approved", { exact: true })).toBeVisible();
   await expect(cleanRow.getByText("$4,200.00")).toBeVisible();
 
+  const exceptionUpload = page.waitForResponse((response) =>
+    response.url().endsWith("/api/procurement/ingest") && response.request().method() === "POST");
   await input.setInputFiles(exception);
+  const secondAccepted = await exceptionUpload;
+  expect(secondAccepted.status(), await secondAccepted.text()).toBe(202);
   const exceptionRow = queue.getByRole("row").filter({ hasText: "PO-2026-419" });
   await expect(exceptionRow.getByText("Awaiting approval", { exact: true })).toBeVisible();
   await expect(exceptionRow.getByText("$18,450.00")).toBeVisible();

@@ -34,6 +34,7 @@ export default function ControlTower() {
   const input = useRef<HTMLInputElement>(null);
   const activeId = picked ?? runs[0]?.run_id ?? null;
   const active = detail?.run_id === activeId ? detail : null;
+  const activeSummary = runs.find((run) => run.run_id === activeId);
 
   useEffect(() => {
     const stop = new AbortController();
@@ -209,7 +210,7 @@ export default function ControlTower() {
             <thead><tr><th scope="col">Purchase order</th><th scope="col">Run ID</th><th scope="col">Vendor</th><th scope="col">Grand total</th><th scope="col">Status</th><th scope="col">Intake</th><th scope="col"><span className="sr-only">Open</span></th></tr></thead>
             <tbody>{visible.map((run) => (
               <tr key={run.run_id} data-selected={run.run_id === activeId} onClick={() => select(run.run_id)}>
-                <td><button className="po-link" onClick={(event) => { event.stopPropagation(); select(run.run_id); }}>
+                <td><button className="po-link" aria-current={run.run_id === activeId || undefined} onClick={(event) => { event.stopPropagation(); select(run.run_id); }}>
                   <FileText size={16} />{run.po_number ?? "Pending extraction"}</button></td>
                 <td><span className="run-id" title={run.run_id}>{run.run_id.slice(0, 8)}</span></td>
                 <td>{run.vendor ?? "—"}</td>
@@ -246,7 +247,7 @@ export default function ControlTower() {
           {detailError && <p className="error-note panel-error" role="alert">{detailError}</p>}
           {active ? <div className="inspector-body">
             <p className="run-meta"><span title={active.run_id}>Run ID · {active.run_id}</span>
-              {runs.find((run) => run.run_id === activeId) && <span>Created · {dateTime(runs.find((run) => run.run_id === activeId)!.created_at)}</span>}</p>
+              {activeSummary && <span>Created · {dateTime(activeSummary.created_at)}</span>}</p>
             {tab === "review" ? <Inspector key={active.run_id} run={active} pending={queued === activeId} resolve={resolve} />
               : <Audit run={active} events={audit?.id === activeId ? audit.rows : null}
                   error={auditError} busy={busy} test={() => void testDuplicate()} />}

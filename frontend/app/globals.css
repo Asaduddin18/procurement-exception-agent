@@ -117,7 +117,7 @@ tr:last-child td { border-bottom: 0; }
 .small-tag { color: var(--secondary); border: 1px solid #3c424f; background: #262a33; }
 .line-table th, .line-table td { padding: 10px 12px; }
 .line-table th:first-child { text-align: left; }
-.line-table td:first-child { display: flex; align-items: flex-start; gap: 7px; min-width: 174px; }
+.line-sku { display: flex; align-items: flex-start; gap: 7px; min-width: 174px; }
 .line-table td:nth-child(n+2) { white-space: nowrap; font-variant-numeric: tabular-nums; }
 .line-table td strong { color: var(--fg); display: block; }
 .line-table td small { display: block; color: var(--muted); font-size: 11px; margin-top: 2px; }

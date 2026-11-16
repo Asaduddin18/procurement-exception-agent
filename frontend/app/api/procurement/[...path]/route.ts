@@ -15,22 +15,32 @@ function allowed(method: string, [root, run, operation, ...extra]: string[]): bo
     || (root === "runs" && uuid.test(run ?? "") && (operation === "resolve" || operation === "test-duplicate"));
 }
 
+function sameHost(origin: string, host: string | null): boolean {
+  try {
+    return new URL(origin).host === host;
+  } catch {
+    return false;
+  }
+}
+
 async function proxy(request: NextRequest, context: Context) {
   const { path } = await context.params;
   if (!allowed(request.method, path)) return Response.json({ detail: "Route not found." }, { status: 404 });
 
   const origin = request.headers.get("origin");
+  const site = request.headers.get("sec-fetch-site");
+  // The browser supplies Sec-Fetch-Site. Use the incoming Host for clients that omit it,
+  // since Next.js can normalize request.nextUrl to an internal loopback hostname.
   if (request.method === "POST" && (
-    request.headers.get("sec-fetch-site") === "cross-site" || (origin && origin !== request.nextUrl.origin)
+    site === "cross-site" || site === "same-site" ||
+    (site !== "same-origin" && origin && !sameHost(origin, request.headers.get("host")))
   )) {
     return Response.json({ detail: "Use the Control Tower origin." }, { status: 403 });
   }
 
   const headers = new Headers();
-  for (const name of ["content-type", "content-length"]) {
-    const value = request.headers.get(name);
-    if (value) headers.set(name, value);
-  }
+  const contentType = request.headers.get("content-type");
+  if (contentType) headers.set("content-type", contentType);
   if (path[2] === "resolve") {
     const authorization = request.headers.get("authorization");
     if (authorization) headers.set("authorization", authorization);
