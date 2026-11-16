@@ -3,6 +3,7 @@
 import logging
 import os
 from contextlib import contextmanager
+from urllib.parse import quote, urlsplit
 
 LOGGER = logging.getLogger(__name__)
 
@@ -44,3 +45,21 @@ def flush() -> None:
             get_client().flush()
         except Exception:
             LOGGER.warning("Unable to flush policy telemetry.")
+
+
+def trace_url(run_id: str) -> str | None:
+    project = os.environ.get("LANGFUSE_PROJECT_ID")
+    if not enabled() or not project:
+        return None
+    base = (os.environ.get("LANGFUSE_BASE_URL") or os.environ.get("LANGFUSE_HOST")
+            or "https://cloud.langfuse.com").rstrip("/")
+    if urlsplit(base).scheme not in {"http", "https"}:
+        return None
+    try:
+        from langfuse import Langfuse
+
+        trace_id = Langfuse.create_trace_id(seed=run_id)
+        return f"{base}/project/{quote(project, safe='')}/traces/{trace_id}"
+    except Exception:
+        LOGGER.warning("Unable to construct policy trace URL.")
+        return None

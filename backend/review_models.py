@@ -63,12 +63,19 @@ class Resolution(ResolutionRequest):
     role: Role
 
 
+class NodeTiming(BaseModel):
+    name: str
+    started_at: datetime
+    latency_ms: int
+
+
 class ReviewOutcome(BaseModel):
     status: Literal["AWAITING_REVIEW", "APPROVED", "DISPUTED", "REJECTED", "FAILED"]
     decision: Decision | None = None
     resolution: Resolution | None = None
     dispute_draft: str | None = None
     error_code: str | None = None
+    node_timings: list[NodeTiming] = Field(default_factory=list)
 
 
 class AuditEvent(BaseModel):
