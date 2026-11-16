@@ -43,7 +43,7 @@ test("uploads, reviews, verifies a duplicate, and resolves a real checkpoint", a
   await page.getByLabel("Reviewer notes").fill("Checked the quoted price and payment terms.");
   await page.getByLabel("Reviewer token").fill("ci-procurement-reviewer");
   await page.getByRole("button", { name: "Approve Exception" }).click();
-  await expect(page.getByRole("alert")).toContainText("Finance Director approval is required");
+  await expect(page.getByRole("alert").filter({ hasText: "Finance Director approval is required" })).toBeVisible();
   await page.getByRole("button", { name: "Draft Dispute Email" }).click();
   await expect(exceptionRow.getByText("Disputed", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Dispute email draft" })).toBeVisible();
