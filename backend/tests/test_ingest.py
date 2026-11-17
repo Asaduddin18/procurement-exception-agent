@@ -195,3 +195,28 @@ def test_worker_rejects_page_evidence_outside_the_document(store):
     assert asyncio.run(process_one(store, extract))
     run = asyncio.run(store.get_run(received.run_id))
     assert run is not None and run.error_code == "invalid_page_reference"
+
+
+def test_control_tower_lists_runs_and_replays_the_verified_receipt(store):
+    pdf = (PDF_DIR / "PO-2026-420_Clean.pdf").read_bytes()
+
+    async def verify():
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(create_app(store.database_url)), base_url="http://test"
+        ) as client:
+            path = "/api/v1/runs"
+            assert (await client.get(path)).json() == []
+            upload = await client.post("/api/v1/ingest", files={"file": ("po.pdf", pdf)})
+            run_id = upload.json()["run_id"]
+            duplicate = await client.post(f"{path}/{run_id}/test-duplicate")
+            assert duplicate.status_code == 200
+            assert duplicate.json()["run_id"] == run_id
+            assert duplicate.json()["duplicate_count"] == 1
+            repeat = await client.post("/api/v1/ingest", files={"file": ("renamed.pdf", pdf)})
+            assert repeat.status_code == 200 and repeat.json()["duplicate_count"] == 2
+            runs = (await client.get(path)).json()
+            assert len(runs) == 1 and runs[0]["duplicate_count"] == 2
+            assert (await client.get(f"{path}/{run_id}")).json()["duplicate_count"] == 2
+            assert (await client.post(f"{path}/00000000-0000-4000-8000-000000000000/test-duplicate")).status_code == 404
+
+    asyncio.run(verify())

@@ -12,7 +12,7 @@ from langgraph.types import Command
 from backend.api import DEFAULT_DATABASE_URL
 from backend.policy_evidence import EvidenceCollector
 from backend.review_graph import build_graph
-from backend.review_models import Decision, ReviewOutcome
+from backend.review_models import ReviewOutcome
 from backend.review_store import ReviewJob, ReviewStore
 from backend.store import MAX_JOB_ATTEMPTS
 from backend.telemetry import flush, trace_stage
@@ -27,12 +27,13 @@ def interrupted(snapshot) -> bool:
 
 
 def projection(snapshot, job: ReviewJob) -> ReviewOutcome | None:
+    timings = snapshot.values.get("node_timings", [])
     if outcome := snapshot.values.get("outcome"):
-        return ReviewOutcome.model_validate(outcome)
+        return ReviewOutcome.model_validate(outcome | {"node_timings": timings})
     if job.kind == "EVALUATE" and interrupted(snapshot):
-        return ReviewOutcome(status="AWAITING_REVIEW", decision=Decision.model_validate(
-            snapshot.values["decision"]
-        ))
+        return ReviewOutcome.model_validate({
+            "status": "AWAITING_REVIEW", "decision": snapshot.values["decision"], "node_timings": timings,
+        })
     return None
 
 

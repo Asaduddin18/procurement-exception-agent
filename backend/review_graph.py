@@ -1,6 +1,11 @@
 """Durable policy graph. The queue worker projects its checkpointed outcome."""
 
-from typing import TypedDict
+from datetime import UTC, datetime
+from functools import wraps
+from inspect import iscoroutinefunction
+from operator import add
+from time import perf_counter
+from typing import Annotated, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import interrupt
@@ -22,6 +27,30 @@ class ProcurementState(TypedDict, total=False):
     decision: dict
     resolution: dict
     outcome: dict
+    node_timings: Annotated[list[dict], add]
+
+
+def timed_node(node):
+    def update(result, started_at, started):
+        return result | {"node_timings": [{
+            "name": node.__name__, "started_at": started_at.isoformat(),
+            "latency_ms": round((perf_counter() - started) * 1000),
+        }]}
+
+    if iscoroutinefunction(node):
+        @wraps(node)
+        async def measured(state):
+            started_at, started = datetime.now(UTC), perf_counter()
+            return update(await node(state), started_at, started)
+
+        return measured
+
+    @wraps(node)
+    def measured(state):
+        started_at, started = datetime.now(UTC), perf_counter()
+        return update(node(state), started_at, started)
+
+    return measured
 
 
 def build_graph(checkpointer, collector: EvidenceCollector):
@@ -74,7 +103,7 @@ def build_graph(checkpointer, collector: EvidenceCollector):
         extract_document, verify_with_mcp, deterministic_risk_gate,
         auto_approve, human_review_interrupt, finalize_review,
     ):
-        graph.add_node(node.__name__, node)
+        graph.add_node(node.__name__, timed_node(node))
     graph.add_edge(START, "extract_document")
     graph.add_edge("extract_document", "verify_with_mcp")
     graph.add_edge("verify_with_mcp", "deterministic_risk_gate")

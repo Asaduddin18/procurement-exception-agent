@@ -8,7 +8,7 @@ import psycopg
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
-from backend.contracts import AcceptedRun, ExtractedPurchaseOrder, IntakeMetadata, RunStatus
+from backend.contracts import AcceptedRun, ExtractedPurchaseOrder, IntakeMetadata, RunStatus, RunSummary
 
 MAX_JOB_ATTEMPTS = 3
 LEASE_SECONDS = 120
@@ -70,15 +70,10 @@ class IngestionStore:
             if await inserted.fetchone() is None:
                 # This provisional run has no dependent records and was never committed.
                 await connection.execute("DELETE FROM procurement_runs WHERE run_id = %s", (run_id,))
-                original = await connection.execute("""
-                    SELECT run_id, thread_id
-                    FROM processed_events JOIN procurement_runs USING (run_id)
-                    WHERE sha256 = %s
-                """, (digest,))
-                row = await original.fetchone()
-                if row is None:
+                duplicate = await self.record_duplicate(connection, digest)
+                if duplicate is None:
                     raise RuntimeError("Committed duplicate could not be resolved.")
-                return AcceptedRun(status="duplicate_ignored", **row)
+                return duplicate
 
             await connection.execute(
                 "INSERT INTO procurement_inputs (run_id, pdf_bytes) VALUES (%s, %s)",
@@ -98,11 +93,47 @@ class IngestionStore:
         async with await self.connect() as connection:
             cursor = await connection.execute("""
                 SELECT run_id, thread_id, status, category, region, error_code, extracted_po,
-                       NULLIF(decision_evidence, '{}'::jsonb) AS decision_evidence
-                FROM procurement_runs WHERE run_id = %s
+                       NULLIF(decision_evidence, '{}'::jsonb) AS decision_evidence,
+                       COALESCE(p.duplicate_count, 0) AS duplicate_count
+                FROM procurement_runs LEFT JOIN processed_events p USING (run_id)
+                WHERE run_id = %s
             """, (run_id,))
             row = await cursor.fetchone()
         return RunStatus.model_validate(row) if row is not None else None
+
+    @staticmethod
+    async def record_duplicate(connection, digest: str) -> AcceptedRun | None:
+        cursor = await connection.execute("""
+            UPDATE processed_events AS event SET duplicate_count = event.duplicate_count + 1
+            FROM procurement_runs AS run
+            WHERE event.sha256 = %s AND run.run_id = event.run_id
+            RETURNING event.run_id, run.thread_id, event.duplicate_count
+        """, (digest,))
+        row = await cursor.fetchone()
+        return AcceptedRun(status="duplicate_ignored", **row) if row is not None else None
+
+    async def test_duplicate(self, run_id: UUID) -> AcceptedRun | None:
+        async with await self.connect() as connection:
+            cursor = await connection.execute("""
+                SELECT i.pdf_bytes, e.sha256
+                FROM procurement_inputs i JOIN processed_events e USING (run_id)
+                WHERE run_id = %s
+            """, (run_id,))
+            row = await cursor.fetchone()
+            if row is None or sha256(row["pdf_bytes"]).hexdigest() != row["sha256"]:
+                return None
+            return await self.record_duplicate(connection, row["sha256"])
+
+    async def list_runs(self, limit: int) -> list[RunSummary]:
+        async with await self.connect() as connection:
+            cursor = await connection.execute("""
+                SELECT r.run_id, r.po_number, r.extracted_po->>'vendor_name' AS vendor,
+                       r.grand_total, r.currency, r.status, r.created_at,
+                       COALESCE(e.duplicate_count, 0) AS duplicate_count
+                FROM procurement_runs r LEFT JOIN processed_events e USING (run_id)
+                ORDER BY r.created_at DESC, r.run_id DESC LIMIT %s
+            """, (limit,))
+            return [RunSummary.model_validate(row) for row in await cursor.fetchall()]
 
     async def claim(self) -> ClaimedJob | None:
         async with await self.connect() as connection:

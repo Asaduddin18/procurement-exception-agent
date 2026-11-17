@@ -1,5 +1,6 @@
 """Public intake contracts and the validated purchase order."""
 
+from datetime import datetime
 from decimal import ROUND_HALF_UP, Decimal, localcontext
 from typing import Annotated, Literal, Self
 from uuid import UUID
@@ -52,6 +53,7 @@ class AcceptedRun(BaseModel):
     status: Literal["queued", "duplicate_ignored"]
     run_id: UUID
     thread_id: UUID
+    duplicate_count: int = 0
 
 
 class PurchaseOrderLine(BaseModel):
@@ -107,3 +109,16 @@ class RunStatus(BaseModel):
     error_code: str | None
     extracted_po: ExtractedPurchaseOrder | None
     decision_evidence: ReviewOutcome | None = None
+    duplicate_count: int = 0
+    trace_url: str | None = None
+
+
+class RunSummary(BaseModel):
+    run_id: UUID
+    po_number: str | None
+    vendor: str | None
+    grand_total: Decimal | None
+    currency: str | None
+    status: str
+    duplicate_count: int
+    created_at: datetime

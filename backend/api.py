@@ -7,13 +7,14 @@ from hmac import compare_digest
 from uuid import UUID
 
 import psycopg
-from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi import FastAPI, HTTPException, Query, Request, Response
 from pydantic import ValidationError
 from starlette.datastructures import UploadFile
 
-from backend.contracts import AcceptedRun, EmailIntake, IntakeMetadata, RunStatus
+from backend.contracts import AcceptedRun, EmailIntake, IntakeMetadata, RunStatus, RunSummary
 from backend.review_auth import authenticate, load_reviewers
 from backend.review_models import AuditEvent, Resolution, ResolutionRequest
+from backend.telemetry import trace_url
 from backend.review_store import ReviewConflict, ReviewForbidden, ReviewNotFound, ReviewStore
 
 DEFAULT_DATABASE_URL = "postgresql://procurement:procurement@127.0.0.1:5432/procurement"
@@ -129,6 +130,13 @@ def create_app(
             response.status_code = 200
         return result
 
+    @app.get("/api/v1/runs", response_model=list[RunSummary])
+    async def list_runs(limit: int = Query(50, ge=1, le=100)) -> list[RunSummary]:
+        try:
+            return await store.list_runs(limit)
+        except psycopg.Error:
+            raise HTTPException(503, "Procurement run storage is unavailable.") from None
+
     @app.get("/api/v1/runs/{run_id}", response_model=RunStatus)
     async def get_run(run_id: UUID) -> RunStatus:
         try:
@@ -137,6 +145,18 @@ def create_app(
             raise HTTPException(503, "Procurement intake storage is unavailable.") from None
         if result is None:
             raise HTTPException(404, "Procurement run was not found.")
+        if result.decision_evidence is not None:
+            result.trace_url = trace_url(str(run_id))
+        return result
+
+    @app.post("/api/v1/runs/{run_id}/test-duplicate", response_model=AcceptedRun)
+    async def test_duplicate(run_id: UUID) -> AcceptedRun:
+        try:
+            result = await store.test_duplicate(run_id)
+        except psycopg.Error:
+            raise HTTPException(503, "Procurement intake storage is unavailable.") from None
+        if result is None:
+            raise HTTPException(404, "Original receipt could not be verified.")
         return result
 
     @app.post("/api/v1/runs/{run_id}/resolve", status_code=202)

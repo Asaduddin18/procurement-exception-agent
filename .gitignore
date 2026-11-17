@@ -9,3 +9,6 @@ __pycache__/
 node_modules/
 .next/
 .DS_Store
+*.tsbuildinfo
+frontend/playwright-report/
+frontend/test-results/
