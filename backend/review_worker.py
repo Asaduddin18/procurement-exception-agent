@@ -4,6 +4,7 @@ import argparse
 import asyncio
 import logging
 import os
+from datetime import date
 
 import psycopg
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
@@ -94,7 +95,10 @@ async def work(database_url: str, mcp_url: str, once: bool) -> None:
     store = ReviewStore(database_url)
     async with AsyncPostgresSaver.from_conn_string(database_url) as saver:
         await setup_checkpointer(store, saver)
-        graph = build_graph(saver, EvidenceCollector(store, mcp_url))
+        demo_date = os.environ.get("DEMO_POLICY_AS_OF")
+        as_of = date.fromisoformat(demo_date) if demo_date else None
+        clock = (lambda: as_of) if as_of is not None else None
+        graph = build_graph(saver, EvidenceCollector(store, mcp_url, clock=clock))
         while True:
             try:
                 processed = await process_review(store, graph)

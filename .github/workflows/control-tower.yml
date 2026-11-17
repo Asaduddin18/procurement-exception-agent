@@ -8,6 +8,8 @@ on:
       - 'mcp_server/**'
       - 'seed/**'
       - 'docker-compose.yml'
+      - '.dockerignore'
+      - '.env.example'
       - '.github/workflows/control-tower.yml'
 
 concurrency:
@@ -20,52 +22,30 @@ permissions:
 jobs:
   browser:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
     env:
-      DATABASE_URL: postgresql://procurement:procurement@127.0.0.1:5432/procurement
-      MCP_DATABASE_URL: postgresql://control_tower_ci:control-tower-fixture@127.0.0.1:5432/procurement
-      REVIEWER_CREDENTIALS_JSON: '{"ci-buyer":{"role":"PROCUREMENT_REVIEWER","token":"ci-procurement-reviewer"}}'
+      PLAYWRIGHT_BASE_URL: http://127.0.0.1:3000
       NEXT_TELEMETRY_DISABLED: '1'
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: python -m pip install -r seed/requirements-test.txt -r mcp_server/requirements.txt -r backend/requirements.txt
       - run: npm --prefix frontend ci --no-audit --no-fund
       - run: npm --prefix frontend run typecheck
-      - run: npm --prefix frontend run build
-      - run: npm exec --prefix frontend -- playwright install chromium
-      - run: docker compose up -d --wait postgres
-      - name: Start test services and verify the browser
+      - name: Start the evaluator Compose stack
         run: |
-          python -m seed.seed
-          docker compose exec -T postgres psql -U procurement -d procurement -v ON_ERROR_STOP=1 <<'SQL'
-          CREATE ROLE control_tower_ci LOGIN PASSWORD 'control-tower-fixture' IN ROLE procurement_mcp_reader;
-          UPDATE sop_policy_versions SET effective_date = CURRENT_DATE - 1
-          WHERE policy_id = 'US-PROCUREMENT' AND version = 2026;
-          UPDATE sop_policy_versions SET effective_date = CURRENT_DATE + 1
-          WHERE policy_id = 'US-PROCUREMENT' AND version = 2027;
-          SQL
-          python -m uvicorn backend.api:create_app --factory --port 8000 &
-          api_pid=$!
-          python -m mcp_server.server --transport streamable-http --port 8001 &
-          mcp_pid=$!
-          python -m backend.review_worker &
-          review_pid=$!
-          PYTHONPATH=. python frontend/tests/extraction_fixture.py &
-          extract_pid=$!
-          trap 'kill "$api_pid" "$mcp_pid" "$review_pid" "$extract_pid" 2>/dev/null || true' EXIT
-          curl -fsS --retry 8 --retry-connrefused http://127.0.0.1:8000/api/v1/runs >/dev/null
-          curl -sS --retry 8 --retry-connrefused http://127.0.0.1:8001/mcp >/dev/null
-          npm --prefix frontend run test:e2e
+          cp .env.example .env
+          docker compose up --detach --build
+          curl -fsS --retry 25 --retry-delay 2 --retry-connrefused http://127.0.0.1:3000/api/procurement/runs >/dev/null
+      - run: npm exec --prefix frontend -- playwright install chromium
+      - run: npm --prefix frontend run test:e2e
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: control-tower-browser-results
           path: frontend/test-results/
+      - if: failure()
+        run: docker compose logs --no-color --tail=120
       - if: always()
         run: docker compose down -v

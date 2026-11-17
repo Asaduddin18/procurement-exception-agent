@@ -1,3 +1,22 @@
+x-python: &python
+  image: procurement-agent-backend:local
+  build:
+    context: .
+    dockerfile: backend/Dockerfile
+
+x-database: &database
+  DATABASE_URL: dbname=procurement
+  PGHOST: postgres
+  PGPORT: "5432"
+  PGUSER: procurement
+  PGPASSWORD: ${POSTGRES_PASSWORD:-procurement}
+
+x-tracing: &tracing
+  LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+  LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+  LANGFUSE_BASE_URL: ${LANGFUSE_BASE_URL:-https://cloud.langfuse.com}
+  LANGFUSE_PROJECT_ID: ${LANGFUSE_PROJECT_ID:-}
+
 services:
   postgres:
     image: pgvector/pgvector:0.8.7-pg16-bookworm
@@ -13,6 +32,95 @@ services:
       test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
       interval: 2s
       timeout: 3s
+      retries: 20
+
+  initialize:
+    <<: *python
+    command: ["python", "-m", "seed.bootstrap_demo"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      <<: *database
+      MCP_DB_PASSWORD: ${MCP_DB_PASSWORD:-procurement_mcp}
+
+  api:
+    <<: *python
+    depends_on:
+      initialize:
+        condition: service_completed_successfully
+    environment:
+      <<: [*database, *tracing]
+      DEMO_REVIEWER_TOKEN: ${DEMO_REVIEWER_TOKEN:-demo-procurement-reviewer}
+      DEMO_FINANCE_TOKEN: ${DEMO_FINANCE_TOKEN:-demo-finance-director}
+      REVIEWER_CREDENTIALS_JSON: ${REVIEWER_CREDENTIALS_JSON:-}
+      INGEST_WEBHOOK_TOKEN: ${INGEST_WEBHOOK_TOKEN:-}
+    ports:
+      - "127.0.0.1:${API_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/runs?limit=1', timeout=2)"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  mcp:
+    <<: *python
+    depends_on:
+      initialize:
+        condition: service_completed_successfully
+    command: ["python", "-m", "mcp_server.server", "--transport", "streamable-http", "--host", "0.0.0.0", "--allowed-host", "mcp"]
+    environment:
+      MCP_DATABASE_URL: dbname=procurement
+      PGHOST: postgres
+      PGPORT: "5432"
+      PGUSER: procurement_mcp
+      PGPASSWORD: ${MCP_DB_PASSWORD:-procurement_mcp}
+      MCP_EMBEDDING_PROVIDER: ${MCP_EMBEDDING_PROVIDER:-fixture}
+      MCP_OPENAI_API_KEY: ${MCP_OPENAI_API_KEY:-}
+      DEMO_POLICY_AS_OF: ${DEMO_POLICY_AS_OF-2026-10-19}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('127.0.0.1', 8001), timeout=2).close()"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  extraction:
+    <<: *python
+    depends_on:
+      initialize:
+        condition: service_completed_successfully
+    command: ["python", "-m", "backend.worker"]
+    environment:
+      <<: *database
+      PROCUREMENT_EXTRACTION_PROVIDER: ${PROCUREMENT_EXTRACTION_PROVIDER:-fixture}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+
+  review:
+    <<: *python
+    depends_on:
+      mcp:
+        condition: service_healthy
+    command: ["python", "-m", "backend.review_worker"]
+    environment:
+      <<: [*database, *tracing]
+      MCP_SERVER_URL: http://mcp:8001/mcp
+      DEMO_POLICY_AS_OF: ${DEMO_POLICY_AS_OF-2026-10-19}
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      PROCUREMENT_API_URL: http://api:8000
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-3000}:3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/procurement/runs?limit=1').then(r=>{if(!r.ok) process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 3s
+      timeout: 4s
       retries: 20
 
 volumes:

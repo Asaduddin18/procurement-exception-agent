@@ -12,7 +12,7 @@ from pydantic import ValidationError
 from starlette.datastructures import UploadFile
 
 from backend.contracts import AcceptedRun, EmailIntake, IntakeMetadata, RunStatus, RunSummary
-from backend.review_auth import authenticate, load_reviewers
+from backend.review_auth import authenticate, load_reviewers, review_configuration
 from backend.review_models import AuditEvent, Resolution, ResolutionRequest
 from backend.telemetry import trace_url
 from backend.review_store import ReviewConflict, ReviewForbidden, ReviewNotFound, ReviewStore
@@ -109,7 +109,7 @@ def create_app(
     email_token = webhook_token if webhook_token is not None else os.environ.get("INGEST_WEBHOOK_TOKEN")
     reviewers = load_reviewers(
         reviewer_credentials if reviewer_credentials is not None
-        else os.environ.get("REVIEWER_CREDENTIALS_JSON", "{}")
+        else review_configuration()
     )
     app = FastAPI(title="Procurement workflow", version="0.4.0")
 

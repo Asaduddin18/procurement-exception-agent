@@ -7,6 +7,7 @@ from datetime import UTC, date, datetime
 from typing import Annotated
 
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import ToolAnnotations
 from pydantic import Field, StringConstraints
 
@@ -33,10 +34,17 @@ def utc_date() -> date:
 
 
 def create_server(
-    repository: EvidenceRepository, embedder: Embedder, clock: Callable[[], date] = utc_date
+    repository: EvidenceRepository, embedder: Embedder, clock: Callable[[], date] = utc_date,
+    *, host: str = "127.0.0.1", allowed_host: str | None = None,
 ) -> FastMCP:
     server = FastMCP(
-        "procurement-evidence", host="127.0.0.1", json_response=True, stateless_http=True
+        "procurement-evidence", host=host, json_response=True, stateless_http=True,
+        transport_security=TransportSecuritySettings(
+            enable_dns_rebinding_protection=True,
+            allowed_hosts=["127.0.0.1:*", "localhost:*", "[::1]:*",
+                           *([f"{allowed_host}:*"] if allowed_host else [])],
+            allowed_origins=["http://127.0.0.1:*", "http://localhost:*", "http://[::1]:*"],
+        ),
     )
 
     @server.tool(annotations=READ_ONLY)
@@ -76,7 +84,9 @@ def create_server(
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--transport", choices=("stdio", "streamable-http"), default="stdio")
-    parser.add_argument("--port", type=int, default=8001, help="Loopback Streamable HTTP port.")
+    parser.add_argument("--host", default="127.0.0.1", help="Streamable HTTP bind address.")
+    parser.add_argument("--allowed-host", help="Permitted internal HTTP hostname.")
+    parser.add_argument("--port", type=int, default=8001, help="Streamable HTTP port.")
     args = parser.parse_args()
 
     database_url = os.environ.get("MCP_DATABASE_URL")
@@ -95,7 +105,12 @@ def main() -> None:
     else:
         parser.error("MCP_EMBEDDING_PROVIDER must be fixture or openai.")
 
-    server = create_server(EvidenceRepository(database_url), embedder)
+    demo_date = os.environ.get("DEMO_POLICY_AS_OF")
+    as_of = date.fromisoformat(demo_date) if demo_date else None
+    clock = (lambda: as_of) if as_of is not None else utc_date
+    server = create_server(
+        EvidenceRepository(database_url), embedder, clock, host=args.host, allowed_host=args.allowed_host,
+    )
     server.settings.port = args.port
     server.run(transport=args.transport)
 
