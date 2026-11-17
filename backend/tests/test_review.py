@@ -15,6 +15,7 @@ from psycopg import sql
 from psycopg.conninfo import make_conninfo
 
 from backend.api import create_app
+from backend.contracts import ExtractedPurchaseOrder
 from backend.demo_extraction import fixture_order
 from backend.policy_evidence import EvidenceCollector
 from backend.review_graph import build_graph

@@ -37,7 +37,7 @@ jobs:
         run: |
           cp .env.example .env
           docker compose up --detach --build
-          curl -fsS --retry 25 --retry-delay 2 --retry-connrefused http://127.0.0.1:3000/api/procurement/runs >/dev/null
+          curl -fsS --max-time 5 --retry 25 --retry-delay 2 --retry-all-errors http://127.0.0.1:3000/api/procurement/runs >/dev/null
       - run: npm exec --prefix frontend -- playwright install chromium
       - run: npm --prefix frontend run test:e2e
       - uses: actions/upload-artifact@v4
