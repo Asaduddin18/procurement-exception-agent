@@ -220,3 +220,18 @@ def test_control_tower_lists_runs_and_replays_the_verified_receipt(store):
             assert (await client.post(f"{path}/00000000-0000-4000-8000-000000000000/test-duplicate")).status_code == 404
 
     asyncio.run(verify())
+
+
+def test_demo_extraction_requires_the_bundled_pdf_bytes(store):
+    pdf = (PDF_DIR / "PO-2026-420_Clean.pdf").read_bytes()
+    valid = asyncio.run(store.register(pdf, IntakeMetadata()))
+    assert asyncio.run(process_one(store, None))
+    extracted = asyncio.run(store.get_run(valid.run_id))
+    assert extracted.status == "EXTRACTED"
+    assert extracted.extracted_po.po_number == "PO-2026-420"
+
+    other = asyncio.run(store.register(pdf + b"\n", IntakeMetadata()))
+    assert asyncio.run(process_one(store, None))
+    failed = asyncio.run(store.get_run(other.run_id))
+    assert failed.status == "FAILED"
+    assert failed.error_code == "demo_pdf_not_bundled"

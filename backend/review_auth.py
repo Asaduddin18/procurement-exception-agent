@@ -1,6 +1,8 @@
 """Resolve deployment-provisioned bearer tokens to reviewer identities."""
 
 from hmac import compare_digest
+from json import dumps
+from os import environ
 from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, StringConstraints, TypeAdapter
@@ -35,3 +37,17 @@ def authenticate(reviewers: dict[str, ReviewerCredential], authorization: str) -
         if compare_digest(token.encode(), reviewer.token.encode()):
             return actor, reviewer.role
     return None
+
+
+def review_configuration() -> str:
+    config = environ.get("REVIEWER_CREDENTIALS_JSON")
+    if config:
+        return config
+    return dumps({
+        actor: {"role": role, "token": token}
+        for actor, role, variable in (
+            ("demo-reviewer", "PROCUREMENT_REVIEWER", "DEMO_REVIEWER_TOKEN"),
+            ("demo-finance", "FINANCE_DIRECTOR", "DEMO_FINANCE_TOKEN"),
+        )
+        if (token := environ.get(variable))
+    })

@@ -16,6 +16,7 @@ from psycopg.conninfo import make_conninfo
 
 from backend.api import create_app
 from backend.contracts import ExtractedPurchaseOrder
+from backend.demo_extraction import fixture_order
 from backend.policy_evidence import EvidenceCollector
 from backend.review_graph import build_graph
 from backend.review_models import Evidence, ReviewOutcome
@@ -27,7 +28,7 @@ from backend.worker import process_one
 from mcp_server.embeddings import FixtureEmbedder
 from mcp_server.repository import EvidenceRepository
 from mcp_server.server import create_server
-from seed.generate_pdfs import APEX_CATALOG, APEX_NAME, ORDERS
+from seed.generate_pdfs import ORDERS
 from seed.seed import bootstrap
 
 AS_OF = date(2026, 10, 19)
@@ -37,21 +38,6 @@ CREDENTIALS = json.dumps({
 })
 REVIEWER = {"Authorization": "Bearer test-reviewer-token"}
 DIRECTOR = {"Authorization": "Bearer test-director-token"}
-
-
-def fixture_order(index: int) -> ExtractedPurchaseOrder:
-    order = ORDERS[index]
-    return ExtractedPurchaseOrder(
-        vendor_name=APEX_NAME, po_number=order.po_number, currency="USD",
-        payment_terms=order.terms, freight=0, tax=0, discount=0,
-        grand_total=order.total, total_source_page=len(order.pages),
-        lines=[
-            dict(line_number=line.number, sku=line.sku, description=APEX_CATALOG[line.sku][0],
-                 unit=APEX_CATALOG[line.sku][1], quantity=line.quantity,
-                 unit_price=line.unit_price, line_total=line.total, source_page=page)
-            for page, lines in enumerate(order.pages, 1) for line in lines
-        ],
-    )
 
 
 @asynccontextmanager
