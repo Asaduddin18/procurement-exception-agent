@@ -45,3 +45,5 @@ FastAPI durably records uploads before acknowledging them. SHA-256 deduplication
 ## Verify and configure
 
 The [verification and demo guide](artifacts/runbooks/verification_and_demo_guide.md) covers the client walkthrough, tests, persistence, result inspection, and provider configuration. See the [system architecture](artifacts/01_system_architecture.md), [decision records](artifacts/02_architecture_decisions.md), and [build spec](SPEC.md) for the design and acceptance criteria.
+
+For the accounts payable extension, use the [QuickBooks Online sandbox setup](artifacts/components/06_qbo_sandbox_setup.md) to provision and verify the two reference purchase orders.
