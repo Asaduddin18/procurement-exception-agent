@@ -2,7 +2,7 @@
 
 ## Purpose & Scope
 
-Provision a US QuickBooks Online Plus sandbox and two open Apex Industrial Supply purchase orders for AP three-way matching. The seed manifest supplies catalog-backed values for operators. Intuit handles development authorization and the initial read-back. The application OAuth callback and QBO adapter are scheduled for a later phase.
+Provision a US QuickBooks Online Plus sandbox and two open Apex Industrial Supply purchase orders for AP three-way matching. The seed manifest supplies catalog-backed values for operators. Intuit handles development authorization and the initial read-back. The [QuickBooks adapter](08_qbo_adapter.md) uses an operator OAuth callback and imports the seeded POs.
 
 ```mermaid
 flowchart TD
@@ -19,10 +19,10 @@ flowchart TD
 | --- | --- |
 | `QBO_CLIENT_ID` | Intuit app development credentials |
 | `QBO_CLIENT_SECRET` | Intuit app development credentials |
-| `QBO_REDIRECT_URI` | Exact URI registered under Development credentials. Proposed local app callback is `http://localhost:8000/api/v1/qbo/oauth/callback`. |
+| `QBO_REDIRECT_URI` | Exact URI registered under Development credentials. The adapter's operator callback is `http://localhost:8765/qbo/callback`. |
 | `QBO_REALM_ID` | Company ID returned when authorizing the selected US sandbox |
 
-Use the scope `com.intuit.quickbooks.accounting`. Store credentials in an ignored local `.env` or secret manager. The proposed application callback becomes usable when the adapter is implemented. Use the redirect URI specified by Intuit's OAuth playground for the initial verification and register it if the playground requires it.
+Use the scope `com.intuit.quickbooks.accounting`. Store credentials in an ignored local `.env` or secret manager. Use the redirect URI specified by Intuit's OAuth playground for the initial verification and register it if the playground requires it.
 
 Both POs use Apex Industrial Supply, USD, and Apex Net 30 vendor terms. Enter item lines using the manifest SKUs, quantities and costs.
 
