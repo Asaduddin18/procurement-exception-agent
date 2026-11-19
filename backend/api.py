@@ -147,7 +147,10 @@ def create_app(
             raise HTTPException(404, "Procurement run was not found.")
         if result.document_type == "INVOICE":
             from backend.ap_workflow import invoice_detail
-            result.ap = await invoice_detail(store.database_url, run_id)
+            try:
+                result.ap = await invoice_detail(store.database_url, run_id)
+            except psycopg.Error:
+                raise HTTPException(503, "AP evidence storage is unavailable.") from None
         if result.decision_evidence is not None:
             result.trace_url = trace_url(str(run_id))
         return result

@@ -17,18 +17,18 @@ from backend.telemetry import trace_stage
 LOGGER = logging.getLogger(__name__)
 
 
-async def process_post(store: APStore, posting: QBOPosting) -> bool:
+async def process_post(store: APStore, posting: QBOPosting, realm_id: str | None = None) -> bool:
     async with await store.connect() as connection:
         async with connection.transaction():
             cursor = await connection.execute("""
                 SELECT j.job_id, j.run_id, j.attempts, i.invoice_id
                 FROM procurement_jobs j JOIN vendor_invoices i USING (run_id)
-                WHERE j.kind = 'QBO_POST' AND (
+                WHERE j.kind = 'QBO_POST' AND (%s::text IS NULL OR i.realm_id = %s) AND (
                     (j.status = 'QUEUED' AND j.available_at <= now()) OR
                     (j.status = 'RUNNING' AND j.lease_expires_at <= now())
                 )
                 ORDER BY j.available_at LIMIT 1 FOR UPDATE OF j SKIP LOCKED
-            """)
+            """, (realm_id, realm_id))
             job = await cursor.fetchone()
             if job is None:
                 return False
@@ -89,7 +89,7 @@ async def work(once=False):
         auth = QBOAuth(store, http, config, Fernet(os.environ["QBO_TOKEN_KEY"].encode()))
         posting = QBOPosting(store, QBOClient(http, config, auth), os.environ.get("QBO_FREIGHT_ACCOUNT_ID"))
         while True:
-            processed = await process_post(store, posting)
+            processed = await process_post(store, posting, config.realm_id)
             if once:
                 return
             if not processed:
