@@ -6,6 +6,7 @@ import psycopg
 from psycopg import sql
 
 from seed.seed import bootstrap
+from seed.ap_demo import seed_receiving
 
 
 def main() -> None:
@@ -13,6 +14,7 @@ def main() -> None:
     password = os.environ["MCP_DB_PASSWORD"]
     bootstrap(database_url)
     with psycopg.connect(database_url) as connection:
+        seed_receiving(connection)
         connection.execute("SELECT pg_advisory_xact_lock(%s)", (767319028,))
         exists = connection.execute(
             "SELECT 1 FROM pg_roles WHERE rolname = 'procurement_mcp'"

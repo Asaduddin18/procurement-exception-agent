@@ -39,6 +39,7 @@ Quantity = Annotated[
 class IntakeMetadata(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    document_type: Literal["PO", "INVOICE"] = "PO"
     source_id: SourceId | None = None
     category: Category = "procurement"
     region: Region = "US"
@@ -101,6 +102,8 @@ class ExtractedPurchaseOrder(BaseModel):
 
 
 class RunStatus(BaseModel):
+    document_type: str = "PO"
+    ap: dict | None = None
     run_id: UUID
     thread_id: UUID
     status: str
@@ -114,6 +117,7 @@ class RunStatus(BaseModel):
 
 
 class RunSummary(BaseModel):
+    document_type: str = "PO"
     run_id: UUID
     po_number: str | None
     vendor: str | None

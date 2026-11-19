@@ -65,14 +65,14 @@ async def advance(graph, job: ReviewJob) -> ReviewOutcome:
     return result
 
 
-async def process_review(store: ReviewStore, graph) -> bool:
+async def process_review(store: ReviewStore, graph, invoice_graph=None) -> bool:
     async with store.claim_review() as job:
         if job is None:
             return False
         try:
             with trace_stage(f"procurement.{job.kind.lower()}", str(job.run_id)):
                 async with asyncio.timeout(90):
-                    outcome = await advance(graph, job)
+                    outcome = await advance(invoice_graph if job.document_type == "INVOICE" else graph, job)
         except Exception as exc:
             LOGGER.warning("Review attempt failed for run %s (%s).", job.run_id, type(exc).__name__)
             await store.retry_review(job, "review_workflow_failed")
@@ -99,9 +99,19 @@ async def work(database_url: str, mcp_url: str, once: bool) -> None:
         as_of = date.fromisoformat(demo_date) if demo_date else None
         clock = (lambda: as_of) if as_of is not None else None
         graph = build_graph(saver, EvidenceCollector(store, mcp_url, clock=clock))
+        from backend.ap_workflow import build_invoice_graph
+        from backend.ap_store import APStore
+        from backend.invoice_models import MatchPolicy
+        from backend.extraction import build_invoice_extractor
+        from seed.ap_demo import extract_demo_invoice
+        invoice_extract = (build_invoice_extractor(os.environ["OPENAI_API_KEY"])
+                           if os.environ.get("PROCUREMENT_EXTRACTION_PROVIDER") == "deepseek"
+                           else extract_demo_invoice)
+        invoice_graph = build_invoice_graph(saver, APStore(database_url),
+            os.environ.get("QBO_REALM_ID") or "999001", invoice_extract, MatchPolicy())
         while True:
             try:
-                processed = await process_review(store, graph)
+                processed = await process_review(store, graph, invoice_graph)
             except psycopg.OperationalError:
                 if once:
                     raise

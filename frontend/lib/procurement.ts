@@ -1,4 +1,5 @@
 export type RunSummary = {
+  document_type?: "PO" | "INVOICE";
   run_id: string;
   po_number: string | null;
   vendor: string | null;
@@ -36,7 +37,23 @@ export type Line = {
   source_page: number;
 };
 
+export type InvoiceDocument = {
+  document_type: string; invoice_number?: string; po_number?: string; vendor_name?: string;
+  currency?: string; total_amount?: string; lines?: Line[];
+};
+export type InvoiceMatch = {
+  evidence: {
+    document: InvoiceDocument;
+    match_snapshot: { lines?: {
+      qbo_line_id: string; sku: string; unit: string; ordered_quantity: string;
+      received_quantity: string; allocated_quantity: string; unit_price: string;
+    }[] };
+  };
+  posting: { status: string; qbo_bill_id: string | null; qbo_attachable_id: string | null } | null;
+};
 export type RunDetail = {
+  document_type?: "PO" | "INVOICE";
+  ap?: InvoiceMatch | null;
   run_id: string;
   thread_id: string;
   status: string;

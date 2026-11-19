@@ -49,3 +49,11 @@ The [verification and demo guide](artifacts/runbooks/verification_and_demo_guide
 For the accounts payable extension, use the [QuickBooks Online sandbox setup](artifacts/components/06_qbo_sandbox_setup.md) to provision and verify the two reference purchase orders. The [AP receiving and invoice ledger](artifacts/components/07_ap_receiving_invoice_ledger.md) describes receipt replay, invoice identity, and quantity reservations. The [QuickBooks adapter runbook](artifacts/components/08_qbo_adapter.md) covers authorization, PO import, and approved bill posting.
 
 The [invoice extraction and matching component](artifacts/components/09_invoice_extraction_and_matching.md) defines the AP document contracts, price tolerance, and cumulative quantity checks.
+
+## Accounts payable workflow
+
+Select **Invoice or statement** in the Control Tower to review invoices against purchase orders and warehouse receipts. The comparison includes prior allocations, price and freight exceptions, and reviewer actions. Approved invoices enter a durable QuickBooks posting queue. Confirmed bills retain the original PDF and audit reference.
+
+The default Compose evaluator includes four offline AP PDFs and receiving records. It displays approved invoices awaiting QuickBooks connection or posting. The optional `qbo` profile enables the real posting worker with configured sandbox credentials.
+
+See the [AP demo and verification runbook](artifacts/runbooks/ap_verification_and_demo.md) and [workflow component design](artifacts/components/10_ap_workflow_and_control_tower.md) for the complete walkthrough.

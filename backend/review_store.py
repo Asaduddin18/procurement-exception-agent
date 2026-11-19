@@ -34,8 +34,9 @@ class ReviewJob:
     lease_token: UUID
     category: str
     region: str
-    extracted_po: dict
+    extracted_po: dict | None
     resolution: Resolution | None
+    document_type: str = "PO"
 
 
 class ReviewStore(IngestionStore):
@@ -84,7 +85,7 @@ class ReviewStore(IngestionStore):
             async with connection.transaction():
                 cursor = await connection.execute("""
                     SELECT j.job_id, j.run_id, j.kind, j.attempts, r.thread_id, r.category,
-                           r.region, r.extracted_po, p.actor_id, p.role, p.action, p.notes
+                           r.region, r.extracted_po, r.document_type, p.actor_id, p.role, p.action, p.notes
                     FROM procurement_jobs j JOIN procurement_runs r USING (run_id)
                     LEFT JOIN procurement_resolutions p USING (run_id)
                     WHERE j.kind IN ('EVALUATE', 'RESUME') AND (
@@ -128,15 +129,23 @@ class ReviewStore(IngestionStore):
                     updated_at = clock_timestamp() WHERE run_id = %s
             """, (outcome.status, Jsonb(outcome.model_dump(mode="json")), outcome.error_code, job.run_id))
             event_key = "policy_finished" if job.kind == "EVALUATE" else "resolution_finished"
+            if job.document_type == "INVOICE" and outcome.status == "APPROVED":
+                await connection.execute("""
+                    INSERT INTO procurement_jobs (job_id, run_id, kind) VALUES (%s, %s, 'QBO_POST')
+                    ON CONFLICT (run_id, kind) DO NOTHING
+                """, (uuid4(), job.run_id))
             event_type = {
                 "AWAITING_REVIEW": "REVIEW_REQUIRED", "APPROVED": "PO_APPROVED",
                 "DISPUTED": "VENDOR_DISPUTE_DRAFTED", "REJECTED": "PO_REJECTED", "FAILED": "REVIEW_FAILED",
             }[outcome.status]
+            if job.document_type == "INVOICE" and outcome.status in ("APPROVED", "REJECTED"):
+                event_type = "AP_INVOICE_APPROVED" if outcome.status == "APPROVED" else "AP_INVOICE_REJECTED"
             actor = outcome.resolution.actor_id if outcome.resolution else None
             await connection.execute("""
                 INSERT INTO audit_logs (run_id, event_key, event_type, actor_id, details)
                 VALUES (%s, %s, %s, %s, %s) ON CONFLICT (run_id, event_key) DO NOTHING
             """, (job.run_id, event_key, event_type, actor, Jsonb({
+                "notes": outcome.resolution.notes if outcome.resolution else "",
                 "status": outcome.status,
                 "approval_tier": outcome.decision.approval_tier if outcome.decision else None,
                 "finding_codes": [item.code for item in outcome.decision.findings] if outcome.decision else [],

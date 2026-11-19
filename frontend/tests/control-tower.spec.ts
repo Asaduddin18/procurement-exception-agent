@@ -71,3 +71,30 @@ test("uploads, reviews, verifies a duplicate, and resolves a real checkpoint", a
   await scroll.evaluate((region) => { region.scrollLeft = 0; });
   await page.screenshot({ path: info.outputPath("control-tower-mobile.png"), fullPage: true });
 });
+
+test("inspects and resolves invoice checkpoints using the three-way comparison", async ({ page }, info) => {
+  await page.goto("/");
+  await page.getByLabel("Document type").selectOption("INVOICE");
+  const input = page.getByLabel("Upload purchase order PDF");
+  await input.setInputFiles("../seed/sample_pdfs/AP_DEMO_Price_Exception.pdf");
+  const queue = page.getByRole("table", { name: "Live runs" });
+  const row = queue.getByRole("row").filter({ hasText: "AP-DEMO-RECEIVING" });
+  await expect(row.getByText("Awaiting approval", { exact: true })).toBeVisible();
+  const comparison = page.getByRole("table", { name: "Three-way invoice comparison" });
+  await expect(comparison.getByRole("columnheader", { name: "PO Ordered" })).toBeVisible();
+  await expect(comparison.getByRole("columnheader", { name: "Warehouse Received" })).toBeVisible();
+  await expect(comparison.getByRole("columnheader", { name: "Vendor Billed" })).toBeVisible();
+  await expect(comparison.locator("tr.flagged")).toHaveCount(1);
+  await page.screenshot({ path: info.outputPath("ap-three-way-match.png"), fullPage: true });
+  await page.getByLabel("Reviewer notes").fill("Vendor needs to correct the unit price against our PO.");
+  await page.getByLabel("Reviewer token").fill("demo-procurement-reviewer");
+  await page.getByRole("button", { name: "Draft Dispute Email" }).click();
+  await expect(row.getByText("Disputed", { exact: true })).toBeVisible();
+  await expect(page.locator("pre")).toContainText("AP-PRICE");
+  await expect(page.locator("pre")).toContainText("SS-316 Valve");
+  await input.setInputFiles("../seed/sample_pdfs/AP_DEMO_Statement.pdf");
+  await expect(page.getByText("Statement blocked", { exact: true })).toBeVisible();
+  await page.getByLabel("Reviewer notes").fill("This is a statement, not a bill.");
+  await page.getByLabel("Reviewer token").fill("demo-procurement-reviewer");
+  await expect(page.getByRole("button", { name: "Approve Exception" })).toBeDisabled();
+});
