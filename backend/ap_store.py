@@ -161,7 +161,7 @@ class APStore:
                         SELECT 1 FROM invoice_line_items line
                         LEFT JOIN qbo_purchase_order_lines po USING (realm_id, qbo_po_id, qbo_line_id)
                         WHERE line.invoice_id = %(invoice_id)s AND
-                            (po.qbo_line_id IS NULL OR po.sku <> line.sku OR po.unit <> line.unit)
+                            (po.qbo_line_id IS NULL OR NOT po.is_active OR po.sku <> line.sku OR po.unit <> line.unit)
                     ) AS matched,
                     NOT EXISTS (
                         SELECT 1 FROM requested req
@@ -200,6 +200,10 @@ class APStore:
     async def begin_post(self, invoice_id: UUID) -> bool:
         """Persist the unknown outcome before the caller attempts a network write."""
         return await self._transition(invoice_id, "RESERVED", "POST_UNKNOWN")
+
+    async def record_post_throttled(self, invoice_id: UUID) -> bool:
+        """Permit a retry after QuickBooks explicitly rejects the write with HTTP 429."""
+        return await self._transition(invoice_id, "POST_UNKNOWN", "RESERVED")
 
     async def _transition(self, invoice_id: UUID, current: str, next_status: str) -> bool:
         async with await self.connect() as connection:

@@ -11,3 +11,5 @@ langgraph>=1.0,<2
 langgraph-checkpoint-postgres>=3.0,<4
 mcp>=1.28,<2
 langfuse>=4,<6
+cryptography>=45,<51
+simplejson>=3.20,<4

@@ -2,7 +2,7 @@
 
 ## Purpose & Scope
 
-The ledger stores the three inputs to AP matching and reserves received quantities before a posting worker can submit a QuickBooks bill. The Phase 2 store accepts structured invoice lines and receipt events. The QuickBooks adapter, invoice extraction, price and freight policy, and Control Tower are subsequent phases.
+The ledger stores the three inputs to AP matching and reserves received quantities before a posting worker can submit a QuickBooks bill. The Phase 2 store accepts structured invoice lines and receipt events. The [QuickBooks adapter](08_qbo_adapter.md) consumes the reservation when posting an approved invoice. Invoice extraction, price and freight policy, and the AP Control Tower follow in later phases.
 
 ```mermaid
 flowchart TD
@@ -25,7 +25,7 @@ flowchart TD
 | `goods_receipts` | Realm, warehouse source, and stable event ID. Each event records a positive quantity in the PO line's unit and its receipt timestamp. Exact replay returns the existing result. A reused ID with a different line, quantity, or timestamp returns a conflict. |
 | `vendor_invoices` | One invoice per realm, vendor, and normalized invoice number. References the existing SHA-256 event ledger by run ID. Stores the printed PO number, resolved PO ID when available, currency, freight, total, posting state, and confirmed bill ID. |
 | `invoice_line_items` | Invoice ID and line number. Optional PO links must refer to the invoice's own resolved PO. The store checks SKU and unit against the linked PO line before reserving. |
-| `qbo_tokens` | One row per realm with separate access and refresh ciphertext fields and expiration timestamps. The adapter will encrypt values before writing and keep the encryption key outside PostgreSQL. |
+| `qbo_tokens` | One row per realm with separate access and refresh ciphertext fields and expiration timestamps. The adapter encrypts values before writing and keeps the encryption key outside PostgreSQL. |
 
 Invoice numbers are case-normalized and trimmed at their ends. The same normalized identity, currency, and total return the existing invoice ID as a duplicate, even when a re-export changes the PDF hash. The same identity with a different total or currency returns an identity conflict without changing the canonical invoice. Header and lines commit together. Dollars and quantities use exact PostgreSQL numeric values, with scale checks to catch precision loss at insertion.
 
@@ -34,7 +34,7 @@ Invoice numbers are case-normalized and trimmed at their ends. The same normaliz
 1. Lock the invoice row and check that it has a resolved, open PO. Lock the referenced PO lines in stable ID order. Reject missing links, SKU mismatches, and unit mismatches.
 2. For each PO line, calculate available units as the lesser of ordered quantity and cumulative received quantity, minus quantities on invoices in `RESERVED`, `POST_UNKNOWN`, and `POSTED`. Sum every line on the candidate invoice that references the same PO line.
 3. At PostgreSQL's read committed isolation level, calculate capacity in a separate statement after locking. This lets a waiting transaction see the competing transaction's committed reservation. Reserve the entire invoice only if every line fits.
-4. A reservation can be released before a posting attempt begins. The future posting worker must atomically transition `RESERVED` to `POST_UNKNOWN` before calling QuickBooks. A second worker loses that transition. Ambiguous outcomes retain capacity until reconciliation. A confirmed bill ID advances the invoice to `POSTED`. Replaying the same confirmation is safe.
+4. A reservation can be released before a posting attempt begins. The posting adapter atomically transitions `RESERVED` to `POST_UNKNOWN` before calling QuickBooks. A second worker loses that transition. Ambiguous outcomes retain capacity until reconciliation. A confirmed bill ID advances the invoice to `POSTED`. Replaying the same confirmation is safe.
 
 The receipt contract is additive. Source-side corrections require a separate adjustment contract before a negative quantity can affect available stock. Receipt totals above the order quantity never increase billable capacity beyond the ordered quantity.
 
