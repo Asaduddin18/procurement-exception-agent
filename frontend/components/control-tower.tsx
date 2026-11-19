@@ -32,6 +32,7 @@ export default function ControlTower() {
   const [queued, setQueued] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ text: string; error?: boolean } | null>(null);
   const input = useRef<HTMLInputElement>(null);
+  const [documentType, setDocumentType] = useState<"PO" | "INVOICE">("PO");
   const activeId = picked ?? runs[0]?.run_id ?? null;
   const active = detail?.run_id === activeId ? detail : null;
   const activeSummary = runs.find((run) => run.run_id === activeId);
@@ -102,11 +103,12 @@ export default function ControlTower() {
     try {
       const form = new FormData();
       form.set("file", file);
+      form.set("document_type", documentType);
       const result = await request<Intake>("ingest", { method: "POST", body: form });
       select(result.run_id);
       setFilter("All runs");
       setFeedback({ text: result.status === "duplicate_ignored"
-        ? "Duplicate blocked. Opened the original run." : "Purchase order queued." });
+        ? "Duplicate blocked. Opened the original run." : documentType === "INVOICE" ? "Invoice queued." : "Purchase order queued." });
       setRevision((old) => old + 1);
     } catch (error) {
       setFeedback({ text: message(error), error: true });
@@ -154,10 +156,10 @@ export default function ControlTower() {
   }
 
   const awaiting = runs.filter((run) => run.status === "AWAITING_REVIEW").length;
-  const approved = runs.filter((run) => run.status === "APPROVED").length;
+  const approved = runs.filter((run) => ["APPROVED", "SYNCED_TO_QBO"].includes(run.status)).length;
   const visible = runs.filter((run) => filter === "All runs"
     || (filter === "Awaiting approval" && run.status === "AWAITING_REVIEW")
-    || (filter === "Approved" && run.status === "APPROVED"));
+    || (filter === "Approved" && ["APPROVED", "SYNCED_TO_QBO"].includes(run.status)));
 
   return (
     <>
@@ -172,10 +174,16 @@ export default function ControlTower() {
 
       <main className="main">
         <div className="page-title">
-          <div><h1>Procurement runs</h1><p>Review purchase orders, policy exceptions, and approvals.</p></div>
+          <div><h1>Procurement runs</h1><p>Review purchase orders, invoices, receiving discrepancies, and approvals.</p></div>
           <div className="actions">
             <button className="btn" onClick={() => setRevision((old) => old + 1)}><RefreshCw size={16} />Refresh</button>
-            <button className="btn primary" disabled={busy} onClick={() => input.current?.click()}><FileUp size={17} />Upload PO</button>
+            <label className="btn">Document type
+              <select aria-label="Document type" value={documentType}
+                onChange={(event) => setDocumentType(event.target.value as "PO" | "INVOICE")}>
+                <option value="PO">Purchase order</option><option value="INVOICE">Invoice or statement</option>
+              </select>
+            </label>
+            <button className="btn primary" disabled={busy} onClick={() => input.current?.click()}><FileUp size={17} />{documentType === "INVOICE" ? "Upload Invoice" : "Upload PO"}</button>
             <input ref={input} type="file" accept=".pdf,application/pdf" aria-label="Upload purchase order PDF"
               hidden onChange={(event) => void upload(event)} />
           </div>

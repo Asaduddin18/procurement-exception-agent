@@ -172,3 +172,20 @@ Each component closes with its specification and executable verification command
 | 4 | Clean POs are approved. Exception runs survive a restart, resume, and produce one audited outcome. | `artifacts/components/04_langgraph_hitl_and_tracing.md` |
 | 5 | The Control Tower reads runs, shows cited exceptions, and submits reviewer actions. | `artifacts/components/05_frontend_control_tower.md` |
 | 6 | A Compose startup supports the end-to-end verification and client demo. | `artifacts/runbooks/verification_and_demo_guide.md` |
+
+## Accounts payable extension
+
+Invoice metadata routes durable uploads to the invoice graph. The [AP workflow component](components/10_ap_workflow_and_control_tower.md) defines the checkpoint and posting handoff. The receiving ledger supplies exact commercial facts, while the existing MCP tools continue to serve PO review. A separate posting worker consumes approved invoice jobs and publishes sync completion after Bill and PDF confirmation.
+
+```mermaid
+flowchart TD
+    UI["Control Tower document upload"] --> API["FastAPI and PostgreSQL jobs"]
+    API --> PO["PO policy graph"]
+    API --> AP["Invoice match graph"]
+    AP --> H["Checkpointed human review"]
+    AP --> R["Receipt-backed reservation"]
+    H --> R
+    R --> Q["Approval and QBO posting job"]
+    Q --> W["QuickBooks adapter worker"]
+    W --> T["Confirmed Bill, source PDF and audit"]
+```

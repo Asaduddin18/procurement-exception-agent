@@ -78,7 +78,7 @@ async def intake_payload(request: Request, webhook_token: str | None) -> tuple[b
                 return {"type": "http.request", "body": body, "more_body": False}
 
             buffered = Request(request.scope, receive=receive)
-            async with buffered.form(max_files=1, max_fields=3, max_part_size=4096) as form:
+            async with buffered.form(max_files=1, max_fields=4, max_part_size=4096) as form:
                 files = form.getlist("file")
                 if len(files) != 1 or not isinstance(files[0], UploadFile):
                     raise HTTPException(422, "A PDF file field named 'file' is required.")
@@ -145,6 +145,12 @@ def create_app(
             raise HTTPException(503, "Procurement intake storage is unavailable.") from None
         if result is None:
             raise HTTPException(404, "Procurement run was not found.")
+        if result.document_type == "INVOICE":
+            from backend.ap_workflow import invoice_detail
+            try:
+                result.ap = await invoice_detail(store.database_url, run_id)
+            except psycopg.Error:
+                raise HTTPException(503, "AP evidence storage is unavailable.") from None
         if result.decision_evidence is not None:
             result.trace_url = trace_url(str(run_id))
         return result
@@ -178,6 +184,27 @@ def create_app(
         except psycopg.Error:
             raise HTTPException(503, "Procurement review storage is unavailable.") from None
         return {"status": "resolution_queued", "run_id": str(run_id)}
+
+    @app.post("/api/v1/runs/{run_id}/retry-sync", status_code=202)
+    async def retry_sync(run_id: UUID, request: Request):
+        reviewer = authenticate(reviewers, request.headers.get("authorization", ""))
+        if reviewer is None:
+            raise HTTPException(401, "Reviewer credential required.")
+        async with await store.connect() as connection:
+            cursor = await connection.execute("""
+                UPDATE procurement_jobs job SET status = 'QUEUED', attempts = 0, available_at = now()
+                FROM procurement_runs run
+                WHERE job.run_id = run.run_id AND run.run_id = %s
+                    AND run.status = 'APPROVED' AND job.kind = 'QBO_POST' AND job.status = 'FAILED'
+                RETURNING job.job_id
+            """, (run_id,))
+            if await cursor.fetchone() is None:
+                raise HTTPException(409, "No failed QuickBooks posting job can be retried.")
+            await connection.execute("""
+                INSERT INTO audit_logs (run_id, event_key, event_type, actor_id)
+                VALUES (%s, gen_random_uuid()::text, 'QBO_SYNC_RETRY', %s)
+            """, (run_id, reviewer[0]))
+        return {"status": "sync_queued", "run_id": str(run_id)}
 
     @app.get("/api/v1/runs/{run_id}/audit", response_model=list[AuditEvent])
     async def get_audit(run_id: UUID) -> list[AuditEvent]:

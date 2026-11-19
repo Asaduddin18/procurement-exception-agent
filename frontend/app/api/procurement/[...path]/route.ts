@@ -12,7 +12,7 @@ function allowed(method: string, [root, run, operation, ...extra]: string[]): bo
     return root === "runs" && (run === undefined || (uuid.test(run) && (!operation || operation === "audit")));
   }
   return (root === "ingest" && run === undefined)
-    || (root === "runs" && uuid.test(run ?? "") && (operation === "resolve" || operation === "test-duplicate"));
+    || (root === "runs" && uuid.test(run ?? "") && (operation === "resolve" || operation === "test-duplicate" || operation === "retry-sync"));
 }
 
 function sameHost(origin: string, host: string | null): boolean {
@@ -41,7 +41,7 @@ async function proxy(request: NextRequest, context: Context) {
   const headers = new Headers();
   const contentType = request.headers.get("content-type");
   if (contentType) headers.set("content-type", contentType);
-  if (path[2] === "resolve") {
+  if (path[2] === "resolve" || path[2] === "retry-sync") {
     const authorization = request.headers.get("authorization");
     if (authorization) headers.set("authorization", authorization);
   }

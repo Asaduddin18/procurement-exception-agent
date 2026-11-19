@@ -105,6 +105,27 @@ services:
       <<: [*database, *tracing]
       MCP_SERVER_URL: http://mcp:8001/mcp
       DEMO_POLICY_AS_OF: ${DEMO_POLICY_AS_OF-2026-10-19}
+      QBO_REALM_ID: ${QBO_REALM_ID:-999001}
+      PROCUREMENT_EXTRACTION_PROVIDER: ${PROCUREMENT_EXTRACTION_PROVIDER:-fixture}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+
+  ap-posting:
+    <<: *python
+    restart: unless-stopped
+    profiles: ["qbo"]
+    depends_on:
+      initialize:
+        condition: service_completed_successfully
+    command: ["python", "-m", "backend.ap_post_worker"]
+    environment:
+      <<: [*database, *tracing]
+      QBO_REALM_ID: ${QBO_REALM_ID:-}
+      QBO_CLIENT_ID: ${QBO_CLIENT_ID:-}
+      QBO_CLIENT_SECRET: ${QBO_CLIENT_SECRET:-}
+      QBO_REDIRECT_URI: ${QBO_REDIRECT_URI:-http://localhost:8765/qbo/callback}
+      QBO_TOKEN_KEY: ${QBO_TOKEN_KEY:-}
+      QBO_ENVIRONMENT: ${QBO_ENVIRONMENT:-sandbox}
+      QBO_FREIGHT_ACCOUNT_ID: ${QBO_FREIGHT_ACCOUNT_ID:-}
 
   frontend:
     build:

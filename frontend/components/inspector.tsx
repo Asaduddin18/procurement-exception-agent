@@ -2,10 +2,10 @@
 
 import { useState } from "react";
 import { AlertTriangle, ArrowUpRight, Check, Clipboard, FileSearch, Mail, ShieldCheck, X } from "lucide-react";
-import { label, money, type Action, type Finding, type RunDetail } from "../lib/procurement";
+import { request, label, money, type Action, type Finding, type RunDetail } from "../lib/procurement";
 
 export function Status({ value }: { value: string }) {
-  const tone = value === "APPROVED" ? "green" : value === "AWAITING_REVIEW" || value === "DISPUTED"
+  const tone = value === "APPROVED" || value === "SYNCED_TO_QBO" ? "green" : value === "AWAITING_REVIEW" || value === "DISPUTED"
     ? "amber" : value === "FAILED" || value === "REJECTED" ? "red" : "neutral";
   return <span className={"status " + tone}><span />{label(value)}</span>;
 }
@@ -84,7 +84,7 @@ function ReviewerForm({ run, pending, resolve }: {
           <button className="btn" disabled={disabled}
             onClick={() => void submit("DISPUTE")}><Mail size={16} />Draft Dispute Email</button>
           <button className="btn danger" disabled={disabled}
-            onClick={() => void submit("REJECT")}><X size={16} />Reject PO</button>
+            onClick={() => void submit("REJECT")}><X size={16} />{run.document_type === "INVOICE" ? "Reject Invoice" : "Reject PO"}</button>
         </div>
       </>}
     </section>
@@ -96,13 +96,40 @@ export function Inspector({ run, pending, resolve }: {
   resolve: (action: Action, notes: string, credential: string) => Promise<boolean>;
 }) {
   const [copyState, setCopyState] = useState("");
-  const po = run.extracted_po;
+  const [retryToken, setRetryToken] = useState("");
+  const [retryMessage, setRetryMessage] = useState("");
+  const invoice = run.ap?.evidence.document;
+  const po = run.document_type === "INVOICE" && invoice?.lines ? {
+    ...invoice, currency: invoice.currency ?? "", grand_total: invoice.total_amount ?? "",
+    payment_terms: "Invoice", lines: invoice.lines,
+  } : run.extracted_po;
   const evidence = run.decision_evidence;
   const findings = evidence?.decision?.findings ?? [];
   const flagged = new Set(findings.map((item) => item.line_number));
   const draft = evidence?.dispute_draft;
   return (
     <>
+      {run.document_type === "INVOICE" && <section className="inset">
+        <div className="inset-head"><h3>Three-way invoice match</h3></div>
+        <p className="inset-empty">Invoice {invoice?.invoice_number ?? invoice?.document_type ?? "extracting"}
+          {run.status === "APPROVED" && " · Approved; awaiting QuickBooks connection or posting"}
+          {run.ap?.posting?.qbo_bill_id && " · QuickBooks Bill " + run.ap.posting.qbo_bill_id}
+          {run.ap?.posting?.qbo_attachable_id && " · Source PDF attached"}</p>
+        <div className="table-scroll"><table aria-label="Three-way invoice comparison">
+          <thead><tr><th>SKU</th><th>PO Ordered</th><th>Warehouse Received</th><th>Previously allocated</th><th>Vendor Billed</th><th>Exceptions</th></tr></thead>
+          <tbody>{invoice?.lines?.map((line) => {
+            const matches = run.ap?.evidence.match_snapshot.lines?.filter((row) => row.sku === line.sku) ?? [];
+            const matched = matches.length === 1 ? matches[0] : null;
+            const flags = findings.filter((finding) => finding.line_number === line.line_number);
+            return <tr key={line.line_number} className={flags.length ? "flagged" : ""}>
+              <td>{line.sku}</td><td>{matched?.ordered_quantity ?? "Review mapping"}</td>
+              <td>{matched?.received_quantity ?? "—"}</td><td>{matched?.allocated_quantity ?? "—"}</td>
+              <td>{line.quantity} {line.unit}</td>
+              <td>{flags.map((finding) => <span className="status red" key={finding.code}>{label(finding.code)}</span>)}</td>
+            </tr>;
+          })}</tbody>
+        </table></div>
+      </section>}
       <div className="inspector-grid">
         <section className="inset" aria-labelledby="lines-title">
           <div className="inset-head"><FileSearch size={16} /><h3 id="lines-title">Extracted line items</h3>
@@ -140,6 +167,23 @@ export function Inspector({ run, pending, resolve }: {
         </section>
       </div>
 
+      {run.document_type === "INVOICE" && run.error_code === "qbo_sync_pending" &&
+        <section className="review-form">
+          <p>QuickBooks posting needs attention. Confirm the connection, then retry.</p>
+          <label>Posting reviewer token<input type="password" autoComplete="off" value={retryToken}
+            onChange={(event) => setRetryToken(event.target.value)} /></label>
+          <button className="btn" disabled={!retryToken} onClick={async () => {
+            try {
+              await request("runs/" + run.run_id + "/retry-sync", {
+                method: "POST", headers: { Authorization: "Bearer " + retryToken },
+              });
+              setRetryToken(""); setRetryMessage("QuickBooks retry queued.");
+            } catch (error) {
+              setRetryMessage(error instanceof Error ? error.message : "Retry failed.");
+            }
+          }}>Retry QuickBooks Sync</button>
+          {retryMessage && <p role="status">{retryMessage}</p>}
+        </section>}
       {run.status === "AWAITING_REVIEW" && <ReviewerForm run={run} pending={pending} resolve={resolve} />}
       {evidence?.resolution && (
         <p className="resolution"><Check size={15} />{label(evidence.resolution.action)} · {evidence.resolution.actor_id}

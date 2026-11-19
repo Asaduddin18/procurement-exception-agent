@@ -58,9 +58,9 @@ class IngestionStore:
         async with await self.connect() as connection:
             await connection.set_isolation_level(psycopg.IsolationLevel.READ_COMMITTED)
             await connection.execute("""
-                INSERT INTO procurement_runs (run_id, thread_id, category, region)
-                VALUES (%s, %s, %s, %s)
-            """, (run_id, thread_id, metadata.category, metadata.region))
+                INSERT INTO procurement_runs (run_id, thread_id, category, region, document_type)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (run_id, thread_id, metadata.category, metadata.region, metadata.document_type))
             inserted = await connection.execute("""
                 INSERT INTO processed_events (sha256, run_id, source_id)
                 VALUES (%s, %s, %s)
@@ -80,8 +80,8 @@ class IngestionStore:
                 (run_id, pdf_bytes),
             )
             await connection.execute(
-                "INSERT INTO procurement_jobs (job_id, run_id, kind) VALUES (%s, %s, 'PROCESS')",
-                (uuid4(), run_id),
+                "INSERT INTO procurement_jobs (job_id, run_id, kind) VALUES (%s, %s, %s)",
+                (uuid4(), run_id, "EVALUATE" if metadata.document_type == "INVOICE" else "PROCESS"),
             )
             await connection.execute("""
                 INSERT INTO audit_logs (run_id, event_key, event_type)
@@ -92,7 +92,7 @@ class IngestionStore:
     async def get_run(self, run_id: UUID) -> RunStatus | None:
         async with await self.connect() as connection:
             cursor = await connection.execute("""
-                SELECT run_id, thread_id, status, category, region, error_code, extracted_po,
+                SELECT run_id, thread_id, status, category, region, error_code, extracted_po, document_type,
                        NULLIF(decision_evidence, '{}'::jsonb) AS decision_evidence,
                        COALESCE(p.duplicate_count, 0) AS duplicate_count
                 FROM procurement_runs LEFT JOIN processed_events p USING (run_id)
@@ -127,10 +127,11 @@ class IngestionStore:
     async def list_runs(self, limit: int) -> list[RunSummary]:
         async with await self.connect() as connection:
             cursor = await connection.execute("""
-                SELECT r.run_id, r.po_number, r.extracted_po->>'vendor_name' AS vendor,
+                SELECT r.run_id, r.document_type, r.po_number, COALESCE(r.extracted_po->>'vendor_name', v.vendor_name) AS vendor,
                        r.grand_total, r.currency, r.status, r.created_at,
                        COALESCE(e.duplicate_count, 0) AS duplicate_count
                 FROM procurement_runs r LEFT JOIN processed_events e USING (run_id)
+                LEFT JOIN vendors v ON v.vendor_id = r.vendor_id
                 ORDER BY r.created_at DESC, r.run_id DESC LIMIT %s
             """, (limit,))
             return [RunSummary.model_validate(row) for row in await cursor.fetchall()]
